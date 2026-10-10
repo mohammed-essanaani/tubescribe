@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TubeScribe</title>
+  <meta name="description" content="Turn YouTube videos, playlists and channels into clean, searchable transcripts.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script>
+    try { const t = localStorage.getItem("ts-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2" y="6" width="28" height="20" rx="6" fill="var(--accent)"/>
+        <path d="M9 13h9M9 17h14M9 21h6" stroke="var(--accent-ink)" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">TubeScribe</span>
+      <span class="badge badge-muted" id="version"></span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="open-folder" title="Open the transcripts folder">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Open folder</span>
+      </button>
+      <button class="btn btn-icon" id="theme-toggle" aria-label="Toggle dark mode">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>YouTube transcripts</h1>
+      <p>Paste a link to a video, Short, playlist or channel to download its transcripts.</p>
+    </section>
+
+    <!-- Extract -->
+    <section class="card" aria-labelledby="extract-title">
+      <h2 id="extract-title" class="sr-only">New extraction</h2>
+      <form id="extract-form" autocomplete="off">
+        <div class="url-row">
+          <label class="url-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+            <span class="sr-only">YouTube link</span>
+            <input id="url" name="url" type="text" inputmode="url" required
+                   placeholder="https://youtube.com/@channel  ·  a video  ·  a playlist  ·  @handle">
+            <span class="chip" id="url-kind" hidden></span>
+            <button type="button" class="btn btn-small btn-ghost" id="paste-btn">Paste</button>
+          </label>
+          <button class="btn btn-primary" id="extract-btn" type="submit">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
+            Extract
+          </button>
+        </div>
+
+        <div class="options">
+          <div class="field">
+            <label for="language">Language</label>
+            <div class="inline">
+              <select id="language"></select>
+              <input id="language-custom" type="text" placeholder="code, e.g. sw" maxlength="12" hidden>
+            </div>
+            <p class="hint" id="language-hint">Uses the language spoken in each video.</p>
+          </div>
+
+          <div class="field">
+            <span class="label">Formats</span>
+            <div class="chips" id="formats" role="group" aria-label="Output formats">
+              <label class="chip-check"><input type="checkbox" value="md" checked><span>Markdown</span></label>
+              <label class="chip-check"><input type="checkbox" value="txt"><span>Text</span></label>
+              <label class="chip-check"><input type="checkbox" value="json"><span>JSON</span></label>
+              <label class="chip-check"><input type="checkbox" value="srt"><span>SRT</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="label">Speed</span>
+            <div class="segmented" id="speed" role="radiogroup" aria-label="Request pacing"></div>
+            <p class="hint" id="speed-hint"></p>
+          </div>
+
+          <div class="field">
+            <label for="limit">Videos</label>
+            <input id="limit" type="number" min="1" max="5000" placeholder="All (or latest N)">
+            <p class="hint">For channels and playlists.</p>
+          </div>
+        </div>
+
+        <details class="more">
+          <summary>More options</summary>
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="allow-translation" checked><span class="switch"></span>
+              <span><strong>Translate when needed</strong><small>Use YouTube's machine translation if your language isn't available. If the translation fails, the original is saved.</small></span></label>
+            <label class="toggle"><input type="checkbox" id="allow-auto" checked><span class="switch"></span>
+              <span><strong>Auto-generated captions</strong><small>Use speech recognition when the creator didn't upload captions.</small></span></label>
+            <label class="toggle"><input type="checkbox" id="timestamps"><span class="switch"></span>
+              <span><strong>Timestamps</strong><small>Add clickable timestamps to each paragraph in exported files.</small></span></label>
+            <label class="toggle"><input type="checkbox" id="force"><span class="switch"></span>
+              <span><strong>Re-download existing</strong><small>By default, videos already in your library are skipped.</small></span></label>
+          </div>
+          <div class="langs-probe">
+            <button type="button" class="btn btn-small btn-ghost" id="probe-btn">Check available languages for this video</button>
+            <div id="probe-result" class="probe-result" hidden></div>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <!-- Progress -->
+    <section class="card progress-card" id="progress" hidden aria-live="polite">
+      <div class="progress-head">
+        <div>
+          <p class="eyebrow" id="job-kind">Working</p>
+          <h2 id="job-title">Resolving link...</h2>
+        </div>
+        <button class="btn btn-ghost btn-danger" id="cancel-btn" type="button">Cancel</button>
+      </div>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="bar"><span id="bar-fill"></span></div>
+      <div class="progress-meta">
+        <span id="job-count">0 / 0</span>
+        <span id="job-activity" class="activity"></span>
+      </div>
+      <div class="stats">
+        <div class="stat stat-ok"><span id="stat-saved">0</span>saved</div>
+        <div class="stat"><span id="stat-skipped">0</span>already had</div>
+        <div class="stat stat-warn"><span id="stat-nocap">0</span>no captions</div>
+        <div class="stat stat-bad"><span id="stat-failed">0</span>failed</div>
+      </div>
+      <div class="alert" id="job-alert" hidden></div>
+      <ol class="log" id="log"></ol>
+    </section>
+
+    <!-- Library -->
+    <section class="library" aria-labelledby="library-title">
+      <div class="library-head">
+        <h2 id="library-title">Library <span class="count" id="library-count"></span></h2>
+        <div class="library-tools">
+          <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <span class="sr-only">Search library</span>
+            <input id="search" type="search" placeholder="Search titles & channels">
+          </label>
+          <div class="split">
+            <select id="zip-format" aria-label="ZIP format">
+              <option value="md">.md</option><option value="txt">.txt</option>
+              <option value="json">.json</option><option value="srt">.srt</option>
+            </select>
+            <a class="btn btn-ghost" id="zip-btn" href="/api/export.zip">Download all</a>
+          </div>
+        </div>
+      </div>
+      <ul class="items" id="items"></ul>
+      <div class="empty" id="empty" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
+        <p><strong>No transcripts yet.</strong><br>Paste a link above to get started.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Runs locally. Not affiliated with YouTube.</p>
+  </footer>
+
+  <!-- Reader -->
+  <dialog class="reader" id="reader" aria-labelledby="reader-title">
+    <div class="reader-inner">
+      <header class="reader-head">
+        <div class="reader-titles">
+          <p class="eyebrow" id="reader-meta"></p>
+          <h2 id="reader-title"></h2>
+          <div class="badges" id="reader-badges"></div>
+        </div>
+        <button class="btn btn-icon" id="reader-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <div class="reader-tools">
+        <label class="search search-small">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="sr-only">Find in transcript</span>
+          <input id="reader-find" type="search" placeholder="Find in transcript">
+          <span class="find-count" id="find-count"></span>
+        </label>
+        <label class="toggle toggle-compact"><input type="checkbox" id="reader-ts" checked><span class="switch"></span><span>Timestamps</span></label>
+        <div class="reader-actions">
+          <button class="btn btn-small btn-ghost" id="copy-btn">Copy</button>
+          <a class="btn btn-small btn-ghost" id="dl-md">.md</a>
+          <a class="btn btn-small btn-ghost" id="dl-txt">.txt</a>
+          <a class="btn btn-small btn-ghost" id="dl-srt">.srt</a>
+          <a class="btn btn-small btn-ghost" id="dl-json">.json</a>
+          <a class="btn btn-small btn-primary" id="yt-link" target="_blank" rel="noopener">Watch</a>
+        </div>
+      </div>
+      <article class="reader-body" id="reader-body"></article>
+    </div>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
